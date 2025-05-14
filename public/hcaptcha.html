@@ -19076,6 +19076,9 @@
                 t && (s.motionData = JSON.stringify(t)),
                 i && (s.pd = JSON.stringify(i)),
                 n && (s.pdc = JSON.stringify(n));
+
+                  console.log(s,'ssss')
+
               var a = (function () {
                 if (!performance || !performance.getEntriesByType) return null;
                 var t,
@@ -19129,6 +19132,8 @@
                         }));
                     } else a = Promise.resolve();
                     a.then(function () {
+                      console.log('--------- Request -------')
+                      console.log(l)
                       return Te({
                         url: ut.endpoint + "/getcaptcha/" + s.sitekey,
                         data: l,
