@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { webhook } from "@/services/authService";
 
 export default function Page() {
   const searchParams = useSearchParams();
@@ -10,11 +9,12 @@ export default function Page() {
   const [uid, setUid] = useState("");
   const blobRef = useRef("");
   const uidRef = useRef("");
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  const tokenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const blobValue = searchParams.get("blob");
     const uidValue = searchParams.get("uid");
-    console.log(uidValue, "uidValueuidValue");
 
     if (blobValue) {
       setBlob(blobValue);
@@ -22,21 +22,48 @@ export default function Page() {
     }
 
     if (uidValue) {
-      uidRef.current = uidValue;
       setUid(uidValue);
+      uidRef.current = uidValue;
     }
   }, [searchParams]);
 
+  const updateResult = (status: "success" | "failed", token?: string) => {
+    if (tokenTimeoutRef.current) {
+      clearTimeout(tokenTimeoutRef.current);
+    }
+
+    if (resultRef.current) {
+      resultRef.current.innerText =
+        status === "success" ? `success:${token}` : "failed";
+    }
+  };
+
   const handleExecute = () => {
-    if (!blobRef.current) return alert("Không có blob");
+    if (!blobRef.current) {
+      alert("Không có blob");
+      updateResult("failed");
+      return;
+    }
 
     if (window.hcaptcha) {
-      window.hcaptcha.setData({
-        rqdata: blobRef.current,
-      });
-      window.hcaptcha.execute();
+      try {
+        window.hcaptcha.setData({ rqdata: blobRef.current });
+        window.hcaptcha.execute();
+
+        // Timeout nếu không có token sau 5 giây
+        tokenTimeoutRef.current = setTimeout(() => {
+          console.warn(
+            "Timeout - không nhận được token, có thể đã hiện challenge"
+          );
+          updateResult("failed");
+        }, 5000);
+      } catch (error) {
+        console.error("Error executing hCaptcha:", error);
+        updateResult("failed");
+      }
     } else {
       alert("Captcha chưa sẵn sàng!");
+      updateResult("failed");
     }
   };
 
@@ -49,11 +76,17 @@ export default function Page() {
           window.hcaptcha.render(container, {
             sitekey: "019f1553-3845-481c-a6f5-5a60ccf6d830",
             size: "invisible",
-            callback: async (token: string) => {
-              await webhook({
-                token,
-                uid: uidRef.current,
-              });
+            callback: (token: string) => {
+              console.log("Captcha token:", token);
+              updateResult("success", token);
+            },
+            "error-callback": () => {
+              console.error("Captcha error");
+              updateResult("failed");
+            },
+            "expired-callback": () => {
+              console.warn("Captcha expired");
+              updateResult("failed");
             },
           });
         }
@@ -78,6 +111,12 @@ export default function Page() {
       >
         Gửi Captcha
       </button>
+
+      <div
+        id="result"
+        ref={resultRef}
+        className="mt-4 text-lg font-bold text-yellow-400"
+      ></div>
     </div>
   );
 }
